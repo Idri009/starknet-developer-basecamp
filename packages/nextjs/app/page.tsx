@@ -5,6 +5,7 @@ import { IncrementCounterButton } from "~~/components/IncrementCounterButton";
 import { DecrementCounterButton } from "~~/components/DecrementCounterButton";
 import { SetCounterButton } from "~~/components/SetCounterButton";
 import { CounterChangedEvents } from "~~/components/CounterChangedEvents";
+import { ResetCounterButton } from "~~/components/ResetCounterButton";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-stark/useScaffoldReadContract";
 import { useAccount } from "~~/hooks/useAccount";
 
@@ -42,6 +43,9 @@ const Home = () => {
         <CounterValue value={data as any} isLoading={isLoading} errorText={error ? "Error" : undefined} />
         <IncrementCounterButton />
         <SetCounterButton isOwner={isOwner} disabledReason="Only owner" />
+      </div>
+      <div className="mb-6">
+        <ResetCounterButton />
       </div>
       <div className="w-full max-w-2xl">
         <CounterChangedEvents />

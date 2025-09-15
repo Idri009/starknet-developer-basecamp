@@ -7,6 +7,11 @@ import { useScaffoldEventHistory } from "~~/hooks/scaffold-stark/useScaffoldEven
  * Lists all CounterChanged events emitted by the CounterContract since deployment.
  * Uses the scaffold-stark event history hook with watch enabled for live updates.
  */
+
+type Reason = {
+    variant: Record<string, {}>;
+};
+
 export const CounterChangedEvents: React.FC<{
   className?: string;
   fromBlock?: bigint; // optionally override starting block
@@ -24,9 +29,19 @@ export const CounterChangedEvents: React.FC<{
     } as any,
   );
 
-  // data comes oldest -> newest based on hook logic (we reversed when pushing). We'll display newest first.
+  // Build display list: sort newest -> oldest explicitly (by block number if present), then apply optional limit.
   const displayEvents = useMemo(() => {
-    const evts = (data || []).slice().reverse();
+    const evts = (data || []).slice();
+    // Attempt to detect presence of block numbers to create a stable descending order.
+    evts.sort((a: any, b: any) => {
+      const aBlock = a?.log?.block_number ?? a?.log?.blockNumber ?? a?.blockNumber ?? 0;
+      const bBlock = b?.log?.block_number ?? b?.log?.blockNumber ?? b?.blockNumber ?? 0;
+      if (aBlock !== bBlock) return bBlock - aBlock; // higher block first
+      // Fallback: if same block (or missing), keep original relative order by timestamp or index if available
+      const aIdx = a?._idx ?? 0;
+      const bIdx = b?._idx ?? 0;
+      return bIdx - aIdx; // newer (higher idx) first
+    });
     return typeof limit === "number" ? evts.slice(0, limit) : evts;
   }, [data, limit]);
 
@@ -50,24 +65,43 @@ export const CounterChangedEvents: React.FC<{
         {displayEvents.map((evt: any, idx: number) => {
           const parsed = evt.parsedArgs || evt.args || {};
 
+          // Generic formatter (non-enum fields)
           const fmt = (val: any) => {
             if (val === undefined || val === null) return "-";
-            if (typeof val === "object") {
-              if ("variant" in val && typeof (val as any).variant === "string") {
-                return (val as any).variant;
-              }
-              return JSON.stringify(val);
-            }
+            if (typeof val === "object") return JSON.stringify(val);
             if (typeof val === "bigint") return val.toString();
             return String(val);
           };
+          
+          const activeVariant = (reason: Reason): string => {
+            const variant = reason?.variant;
+            const keys = Object.keys(variant);
+            if (keys.length === 0) {
+                return "Unknown";
+            } else if (keys.length === 1) {
+                return keys[0];
+            } else {
+                return keys.find((k) => variant[k] ) ?? "";
+            }
+          }
 
-            // Extract fields with flexible naming
+          // Extract fields with flexible naming
           const oldCount = parsed?.old_count ?? parsed?.oldCount;
           const newCount = parsed?.new_count ?? parsed?.newCount;
           const reasonRaw = parsed?.reason ?? parsed?.reason_name;
+          const reasonLabel = activeVariant(reasonRaw);
           const caller = parsed?.caller;
           const txHash = evt.log?.transaction_hash as string | undefined;
+
+          const reasonBadgeClass = (() => {
+            switch (reasonLabel) {
+              case "Incremented": return "badge-success";
+              case "Decremented": return "badge-error";
+              case "Set": return "badge-info";
+              case "Reset": return "badge-warning";
+              default: return "badge-outline";
+            }
+          })();
           return (
             <li
               key={`${txHash || "tx"}-${idx}`}
@@ -87,7 +121,7 @@ export const CounterChangedEvents: React.FC<{
                 <span className="opacity-70">new:</span>
                 <span>{fmt(newCount)}</span>
                 <span className="opacity-70">reason:</span>
-                <span>{fmt(reasonRaw)}</span>
+                <span className={`badge ${reasonBadgeClass} badge-sm font-normal`}>{reasonLabel}</span>
                 <span className="opacity-70">caller:</span>
                 <span className="truncate" title={fmt(caller)}>{fmt(caller)}</span>
               </div>
